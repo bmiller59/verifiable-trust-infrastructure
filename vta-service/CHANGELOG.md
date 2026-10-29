@@ -2,6 +2,93 @@
 
 Notable changes to the published crates. Generated from conventional commits by
 [git-cliff](https://git-cliff.org) when a release is cut — do not edit by hand.
+## [0.68.0](https://github.com/OpenVTC/verifiable-trust-infrastructure/compare/vta-service-v0.67.0...vta-service-v0.68.0) — 2026-10-29
+
+
+### Changed
+
+- **rooms**: Serve and send only the current rooms/* and vtc/rooms/* versions ([#2335](https://github.com/OpenVTC/verifiable-trust-infrastructure/pull/2335))
+
+The VTA serves rooms/keys/act 0.8 and rooms/keys/browse 0.3 only; the room
+  hosts (room-host, vtc-service) serve rooms/records/put 0.3, records/list 0.5,
+  info 0.3 and epoch/chain 0.2 only; the VTC serves vtc/rooms/offers/list 0.4
+  only. The VTA's own requests to a host (browse, catch-up, anchor, the room's
+  profile, group add/remove) send only those versions, with no fall-back for a
+  host that predates them.
+
+  pnm-browser-plugin sends only current versions since its cut-over
+  (#384-#387); openvtc, vti-rooms-wasm and vta-mobile-core send no superseded
+  room version.
+
+  Kept, with a one-line #[allow(deprecated)] reason each:
+  - rooms/owner/group/remove/0.1: 0.3 refuses a private room and points it at
+    0.1; no successor yet (spec gap).
+  - rooms/keys/act/0.8's own closed table (Recipient item 1) still names
+    superseded host-bound versions and vtc/rooms/offers/list 0.1-0.3; the VTA
+    completes them rather than diverge from the specification.
+
+  Removed public API: vta-sdk TASK_ROOMS_KEYS_ACT_0_1, TASK_ROOMS_KEYS_ACT_0_5,
+  TASK_ROOMS_KEYS_BROWSE_0_1; vti-rooms ROOMS_RECORDS_PUT_TYPE,
+  ROOMS_RECORDS_PUT_V2_TYPE, ROOMS_RECORDS_LIST_TYPE, ROOMS_EPOCH_CHAIN_TYPE,
+  ROOMS_INFO_TYPE, blob_tasks::{info, put_v2_blobs, INFO_TYPE, PUT_V2_TYPE} and
+  the Payload impls of PutRecordBody, ListRecordsBody and ChainBody; vtc-client's
+  re-export of ROOMS_RECORDS_LIST_TYPE.
+
+- **vta**: Serve and send only vta/contexts/delete/1.1 ([#2332](https://github.com/OpenVTC/verifiable-trust-infrastructure/pull/2332))
+
+* refactor(vta)!: serve and send only vta/contexts/delete/1.1
+
+  vta/contexts/delete/1.0 is superseded by 1.1 (trust-tasks-tf #967). The
+  VTA now dispatches only 1.1 and the SDK sends only 1.1:
+
+  - `VtaClient::delete_context` sends 1.1 with `abandonHostCopies: false`,
+    so a host copy that cannot be confirmed removed is refused
+    (`vta/contexts/delete:hostCleanupFailed`) with nothing deleted, instead
+    of being dropped silently as the 1.0 call did.
+  - `delete_context_with_outcome`, `TASK_CONTEXTS_DELETE_1_0` and the
+    hand-written 1.0 payload `DeleteContextBody` are removed; use
+    `delete_context_settling_hosts`.
+  - `pnm`/`cnm contexts delete` no longer falls back to 1.0.
+  - retry_safety, the conformance sweep, the error-code census baseline,
+    the deprecation-table fixture, the vta-mcp guard test and the docs follow.
+
+  The offline break-glass `vta contexts delete` keeps the report-after
+  host-copy policy, which is no longer a wire contract.
+
+
+
+### Fixed
+
+- **step-up**: One approve-request version, 0.5, across the VTA, the VTC and the mobile approver ([#2327](https://github.com/OpenVTC/verifiable-trust-infrastructure/pull/2327))
+
+`auth/step-up/approve-request` was minted at three versions: the VTA at 0.2
+  (a hand-built JSON payload), vtc-service at 0.4 (inline in a refusal) and the
+  did-hosting RP at 0.5. An approver therefore had to read all three, and
+  vta-mobile-core read only 0.1 and 0.2 — so it could answer the VTA but not
+  the RP or the VTC.
+
+  - vta-service mints 0.5, built through the generated
+    `approve_request::v0_5::Payload` and its schema check (as vtc-service
+    already does) rather than a hand-written `json!`; the type URI comes from
+    `<Payload as trust_tasks_rs::Payload>::TYPE_URI`. On the wire:
+    `acceptableEvidence` -> a required `accepts`, `ttl` -> `ttlSeconds`;
+    `sessionId` is still sent, since this is a session step-up.
+  - vtc-service's inline request moves 0.4 -> 0.5 (`ttl` -> `ttlSeconds`).
+    `bound_step_up::ApproveRequest` is now the 0.5 payload, hence `!`.
+  - vta-mobile-core's `parse_step_up_request` accepts 0.5 only, matched
+    exactly, and reads `accepts`. `approverSigned` is surfaced as
+    `approver-signed` rather than dropped. The UniFFI record keeps its shape: a
+    request that names no session (0.5 makes `sessionId` optional) surfaces an
+    empty `session_id`, the convention `stepup`'s response draft already reads.
+  - The VTC console reads `accepts` only (the 0.3 `acceptableEvidence`
+    fallback is gone) and shows `ttlSeconds`.
+
+  The browser wallet cuts over with this: pnm-browser-plugin matches the
+  agent's request at 0.2 today and moves to the single 0.5 pin it already
+  holds for the RP.
+
+
+
 ## [0.67.0](https://github.com/OpenVTC/verifiable-trust-infrastructure/compare/vta-service-v0.66.0...vta-service-v0.67.0) — 2026-10-28
 
 

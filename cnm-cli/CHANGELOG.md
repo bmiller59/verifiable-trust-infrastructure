@@ -2,6 +2,40 @@
 
 Notable changes to the published crates. Generated from conventional commits by
 [git-cliff](https://git-cliff.org) when a release is cut — do not edit by hand.
+## [0.42.0](https://github.com/OpenVTC/verifiable-trust-infrastructure/compare/cnm-cli-v0.41.0...cnm-cli-v0.42.0) — 2026-10-29
+
+
+### Changed
+
+- **git-ns**: Speak only the current git-ns bridge versions (job 0.6, event 0.5, result 0.2) ([#2331](https://github.com/OpenVTC/verifiable-trust-infrastructure/pull/2331))
+
+The VTC sent `git-ns/bridge/job` 0.4 and 0.5 beside 0.6, and served
+  `git-ns/bridge/event` 0.1 to 0.4 and `git-ns/bridge/result` 0.1 beside the
+  current versions, for the released bridge. `vgi-bridge` has sent only job
+  0.6, event 0.5 and result 0.2 since v0.26.0, and nothing outside VTI speaks
+  the older versions, so they go:
+
+  - Jobs go out as `git-ns/bridge/job/0.6` only, and only to a bridge that
+    lists 0.6 in its `trust-task-discovery` answer. `bridge_job_support` no
+    longer records or picks 0.4 / 0.5 (`BridgeJobSupport::job_type`), and the
+    downgrade to an older job version is gone. A bridge that lists only 0.4
+    and 0.5 is sent nothing: in-line jobs are refused with "upgrade the
+    bridge", queued jobs wait, and a queued `closePullRequest` is dropped and
+    the namespace's administrators told the gate is not enforced. A discovery
+    record stored by an earlier VTC still reads.
+  - `git-ns/bridge/event` 0.1-0.4 and `git-ns/bridge/result` 0.1 are no
+    longer served (refused `unsupportedVersion`); the read-as-0.5 and
+    read-as-0.2 conversion shims are removed.
+  - The VTC asks bridges with `trust-task-discovery/0.3` instead of 0.2. 0.3
+    only adds the optional `acceptanceWindow` to the response; the request is
+    unchanged, and `vgi-bridge` answers 0.3 since v0.26.0.
+
+  Docs, vtc-service/CLAUDE.md, the cnm `notRevertible` guidance, the admin
+  console's gate-unenforced label and the default git_ns.rego comments now
+  name job 0.6.
+
+
+
 ## [0.41.0](https://github.com/OpenVTC/verifiable-trust-infrastructure/compare/cnm-cli-v0.40.0...cnm-cli-v0.41.0) — 2026-10-28
 
 

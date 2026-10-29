@@ -2,6 +2,170 @@
 
 Notable changes to the published crates. Generated from conventional commits by
 [git-cliff](https://git-cliff.org) when a release is cut — do not edit by hand.
+## [0.16.0](https://github.com/OpenVTC/verifiable-trust-infrastructure/compare/vtc-service-v0.15.0...vtc-service-v0.16.0) — 2026-10-29
+
+
+### Changed
+
+- **rooms**: Serve and send only the current rooms/* and vtc/rooms/* versions ([#2335](https://github.com/OpenVTC/verifiable-trust-infrastructure/pull/2335))
+
+The VTA serves rooms/keys/act 0.8 and rooms/keys/browse 0.3 only; the room
+  hosts (room-host, vtc-service) serve rooms/records/put 0.3, records/list 0.5,
+  info 0.3 and epoch/chain 0.2 only; the VTC serves vtc/rooms/offers/list 0.4
+  only. The VTA's own requests to a host (browse, catch-up, anchor, the room's
+  profile, group add/remove) send only those versions, with no fall-back for a
+  host that predates them.
+
+  pnm-browser-plugin sends only current versions since its cut-over
+  (#384-#387); openvtc, vti-rooms-wasm and vta-mobile-core send no superseded
+  room version.
+
+  Kept, with a one-line #[allow(deprecated)] reason each:
+  - rooms/owner/group/remove/0.1: 0.3 refuses a private room and points it at
+    0.1; no successor yet (spec gap).
+  - rooms/keys/act/0.8's own closed table (Recipient item 1) still names
+    superseded host-bound versions and vtc/rooms/offers/list 0.1-0.3; the VTA
+    completes them rather than diverge from the specification.
+
+  Removed public API: vta-sdk TASK_ROOMS_KEYS_ACT_0_1, TASK_ROOMS_KEYS_ACT_0_5,
+  TASK_ROOMS_KEYS_BROWSE_0_1; vti-rooms ROOMS_RECORDS_PUT_TYPE,
+  ROOMS_RECORDS_PUT_V2_TYPE, ROOMS_RECORDS_LIST_TYPE, ROOMS_EPOCH_CHAIN_TYPE,
+  ROOMS_INFO_TYPE, blob_tasks::{info, put_v2_blobs, INFO_TYPE, PUT_V2_TYPE} and
+  the Payload impls of PutRecordBody, ListRecordsBody and ChainBody; vtc-client's
+  re-export of ROOMS_RECORDS_LIST_TYPE.
+
+- **vtc**: Approve-response 0.4 only for the console's unsigned answer; drop the unused acl/revoke 0.1 OpenAPI wrapper ([#2333](https://github.com/OpenVTC/verifiable-trust-infrastructure/pull/2333))
+
+The superseded auth/acl Trust Task versions, narrowed to what still needs
+  them.
+
+  auth/step-up/approve-response/0.4 (superseded by 0.6). The VTC now hears 0.4
+  only as the admin console's unsigned session-passkey answer. Every signed
+  answer — a member's step-up passkey beside their own proof, a refusal, a
+  wallet's approver statement — is 0.6, and a signed 0.4 is refused with a
+  pointer to 0.6. The 0.4 document is checked against 0.4's schema and then
+  handled as the 0.6 payload it is wire-identical to, so
+  `bound_step_up::approve` and everything past the door read 0.6 only. The
+  console's Decline now sends 0.6.
+
+  0.4 itself stays: approve-response 0.5 onward require the approver's own
+  assertionMethod proof, and the console holds only a delegated key, which
+  auth/signing-key/enroll/0.2 item 7 refuses as an approver's attestation. The
+  console's unsigned answer has no successor in the specification yet.
+
+  acl/change-role/0.1 (superseded by 0.2) stays as the community-role door,
+  as #2323 kept it: 0.2 moves an AclEntry 0.2's administrative role, and the
+  community role (member <-> admin, role-VAC re-mint, promotion serialisation)
+  has no 0.2 task. Its uses now carry a per-item #[allow(deprecated)] naming
+  that gap.
+
+- **git-ns**: Speak only the current git-ns bridge versions (job 0.6, event 0.5, result 0.2) ([#2331](https://github.com/OpenVTC/verifiable-trust-infrastructure/pull/2331))
+
+The VTC sent `git-ns/bridge/job` 0.4 and 0.5 beside 0.6, and served
+  `git-ns/bridge/event` 0.1 to 0.4 and `git-ns/bridge/result` 0.1 beside the
+  current versions, for the released bridge. `vgi-bridge` has sent only job
+  0.6, event 0.5 and result 0.2 since v0.26.0, and nothing outside VTI speaks
+  the older versions, so they go:
+
+  - Jobs go out as `git-ns/bridge/job/0.6` only, and only to a bridge that
+    lists 0.6 in its `trust-task-discovery` answer. `bridge_job_support` no
+    longer records or picks 0.4 / 0.5 (`BridgeJobSupport::job_type`), and the
+    downgrade to an older job version is gone. A bridge that lists only 0.4
+    and 0.5 is sent nothing: in-line jobs are refused with "upgrade the
+    bridge", queued jobs wait, and a queued `closePullRequest` is dropped and
+    the namespace's administrators told the gate is not enforced. A discovery
+    record stored by an earlier VTC still reads.
+  - `git-ns/bridge/event` 0.1-0.4 and `git-ns/bridge/result` 0.1 are no
+    longer served (refused `unsupportedVersion`); the read-as-0.5 and
+    read-as-0.2 conversion shims are removed.
+  - The VTC asks bridges with `trust-task-discovery/0.3` instead of 0.2. 0.3
+    only adds the optional `acceptanceWindow` to the response; the request is
+    unchanged, and `vgi-bridge` answers 0.3 since v0.26.0.
+
+  Docs, vtc-service/CLAUDE.md, the cnm `notRevertible` guidance, the admin
+  console's gate-unenforced label and the default git_ns.rego comments now
+  name job 0.6.
+
+
+
+### Fixed
+
+- **voting,witness,persona**: Board read at voting/board/read 0.2, witness evidence at witness/session 0.2 only, the persona timeline answer at 1.1 ([#2334](https://github.com/OpenVTC/verifiable-trust-infrastructure/pull/2334))
+
+trust-tasks-rs marks voting/board/read/0.1, witness/session/0.1,
+  witness/session/submit/0.1 and persona/profile/timeline/1.0 superseded.
+  Every party to each is in this workspace or has already moved, so each moves
+  to its current version alone.
+
+  voting/board/read 0.1 -> 0.2. A lifecycle entry's (opened, closed,
+  closedEarly, cancelled) instant is `occurredAt`, as voting/_shared/0.2 and
+  its CONVENTIONS §1 name it, not `at`.
+  - The ballot box writes lifecycle entries with `occurredAt`, serves
+    board/read at 0.2 only (0.1 is `unsupportedVersion`), and reads
+    `occurredAt` when it replays its journal.
+  - The VTC sends board/read at 0.2; the auditor (vti_voting::audit and its
+    encrypted levels) reads `occurredAt`.
+  - A leaf hash is over the entry's member names, so an entry journalled with
+    `at` cannot be renamed without changing the board. Like a 0.1 manifest
+    ([#2317](https://github.com/OpenVTC/verifiable-trust-infrastructure/pull/2317)) it is refused by name: the ballot box will not restore a journal
+    holding one, and the auditor reports it as unreadable rather than as
+    "voting opened before votingOpensAt". Finish or cancel open elections
+    before upgrading.
+
+  witness/session 0.1 and submit 0.1. vti-witness and the VTA already serve
+  only 0.2 ([#2147](https://github.com/OpenVTC/verifiable-trust-infrastructure/pull/2147)), and openvtc main sends 0.2. The VTC no longer pairs outcome
+  evidence from a 0.1 session with a submit/0.1 response: such evidence pairs
+  with nothing.
+
+  persona/profile/timeline 1.0 -> 1.1. The SDK already sent 1.1 but parsed the
+  answer as the 1.0 response, whose events require `at`; a 1.1 answer names it
+  `occurredAt`, so it failed to parse. `VtaClient::persona_profile_timeline`
+  now returns the 1.1 response.
+
+- **vtc-admin-ui**: Fall back to the gradient mark for a logo the sign-in pages cannot show ([#2329](https://github.com/OpenVTC/verifiable-trust-infrastructure/pull/2329))
+
+The member portal and the console's login page rendered the community's
+  logoUrl as-is in their shared top bar (CommunityTopbar). The VTC serves
+  both with `img-src 'self' data:`, so a logo on another origin was blocked
+  (a broken image plus a CSP violation in the console), and a URL that is
+  not an image (a home page) showed broken too.
+
+  The console's own top bar already filtered through displayableLogo and
+  fell back on load error. The sign-in top bar now does the same.
+  displayableLogo moves to a dependency-free lib/display-logo.ts so the
+  member bundle can use it without importing the console's plugins;
+  community-identity re-exports it.
+
+- **step-up**: One approve-request version, 0.5, across the VTA, the VTC and the mobile approver ([#2327](https://github.com/OpenVTC/verifiable-trust-infrastructure/pull/2327))
+
+`auth/step-up/approve-request` was minted at three versions: the VTA at 0.2
+  (a hand-built JSON payload), vtc-service at 0.4 (inline in a refusal) and the
+  did-hosting RP at 0.5. An approver therefore had to read all three, and
+  vta-mobile-core read only 0.1 and 0.2 — so it could answer the VTA but not
+  the RP or the VTC.
+
+  - vta-service mints 0.5, built through the generated
+    `approve_request::v0_5::Payload` and its schema check (as vtc-service
+    already does) rather than a hand-written `json!`; the type URI comes from
+    `<Payload as trust_tasks_rs::Payload>::TYPE_URI`. On the wire:
+    `acceptableEvidence` -> a required `accepts`, `ttl` -> `ttlSeconds`;
+    `sessionId` is still sent, since this is a session step-up.
+  - vtc-service's inline request moves 0.4 -> 0.5 (`ttl` -> `ttlSeconds`).
+    `bound_step_up::ApproveRequest` is now the 0.5 payload, hence `!`.
+  - vta-mobile-core's `parse_step_up_request` accepts 0.5 only, matched
+    exactly, and reads `accepts`. `approverSigned` is surfaced as
+    `approver-signed` rather than dropped. The UniFFI record keeps its shape: a
+    request that names no session (0.5 makes `sessionId` optional) surfaces an
+    empty `session_id`, the convention `stepup`'s response draft already reads.
+  - The VTC console reads `accepts` only (the 0.3 `acceptableEvidence`
+    fallback is gone) and shows `ttlSeconds`.
+
+  The browser wallet cuts over with this: pnm-browser-plugin matches the
+  agent's request at 0.2 today and moves to the single 0.5 pin it already
+  holds for the RP.
+
+
+
 ## [0.15.0](https://github.com/OpenVTC/verifiable-trust-infrastructure/compare/vtc-service-v0.14.0...vtc-service-v0.15.0) — 2026-10-28
 
 
